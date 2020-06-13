@@ -13,30 +13,27 @@ import (
 
     "golang.org/x/crypto/ssh/terminal"
 
-    "github.com/miekg/pkcs11"
+    "github.com/miekg/pkcs11/p11"
 )
 
 func main() {
-    p:= pkcs11.New("/usr/lib/x86_64-linux-gnu/opensc-pkcs11.so")
-    err := p.Initialize()
+
+    module, err := p11.OpenModule("/usr/lib/x86_64-linux-gnu/opensc-pkcs11.so")
     if err != nil {
 	panic(err)
     }
 
-    defer p.Destroy()
-    defer p.Finalize()
-
-    slots, err := p.GetSlotList(true)
+    slots, err := module.Slots()
     if err != nil {
 	panic(err)
     }
 
-    session, err := p.OpenSession(slots[0], pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION)
+    session, err := slots[0].OpenSession()
     if err != nil {
 	panic(err)
     }
 
-    defer p.CloseSession(session)
+    defer session.Close()
 
     fmt.Print("User PIN: ")
     bytePin, err := terminal.ReadPassword(syscall.Stdin)
@@ -48,12 +45,11 @@ func main() {
     pin := string(bytePin)
     pin = strings.TrimSpace(pin)
 
-    err = p.Login(session, pkcs11.CKU_USER, pin)
+    err = session.Login(pin)
     if err != nil {
 	panic(err)
     }
 
-    defer p.Logout(session)
-
+    defer session.Logout()
 
 }
