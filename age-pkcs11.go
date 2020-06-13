@@ -7,9 +7,14 @@
 package main
 
 import (
+    "crypto/ecdsa"
+    // "crypto/elliptic"
+    "crypto/x509"
     "encoding/binary"
+    "encoding/pem"
     "errors"
     "fmt"
+    "io/ioutil"
     "math"
     "strconv"
     "strings"
@@ -65,8 +70,10 @@ func main() {
     if err != nil {
 	panic(err)
     }
+    optSlotNum := 0
+    slot := slots[optSlotNum]
 
-    session, err := slots[0].OpenSession()
+    session, err := slot.OpenSession()
     if err != nil {
 	panic(err)
     }
@@ -108,7 +115,47 @@ func main() {
 
     fmt.Printf("%+v\n", object)
 
-    // Ensure derivation mechanism is supported by token
+    // Build derivation mechanism
+
+    //optMechanism := pkcs11.CKM_ECDH1_DERIVE
+    optFileName := "prime256v1-pub.pem"
+
+    pemData, err := ioutil.ReadFile(optFileName)
+    if err != nil {
+	panic(err)
+    }
+
+    pemBlock, _ := pem.Decode(pemData)
+    if pemBlock == nil {
+	panic("failed to parse PEM block containing the public key")
+    }
+
+    if pemBlock.Type != "PUBLIC KEY" {
+	panic("Not public key")
+    }
+
+    publicKey, err := x509.ParsePKIXPublicKey(pemBlock.Bytes)
+    if err != nil {
+	panic(err)
+    }
+
+    switch publicKey.(type) {
+    case *ecdsa.PublicKey:
+    default:
+	panic("Not an ECDSA public key")
+    }
+
+    fmt.Printf("%+v\n", publicKey)
+
+    //publicKeyData :=
+    //ecdh1Params := pkcs11.NewECDH1DeriveParams(pkcs11.CKD_NULL, nil, publicKeyData)
+
+    // So all of the examples for NewMechanism have you passing
+    // in directly a pkcs11.CKM constant, which are ints,
+    // but the function signature requires uints. :shrug:
+    //deriveMechanism := pkcs11.NewMechanism(uint(optMechanism), nil)
+
+    // fmt.Printf("%+v\n", deriveMechanism)
 
     // Derive EC key
 
