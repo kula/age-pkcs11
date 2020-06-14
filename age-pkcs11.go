@@ -25,7 +25,6 @@ import (
     "github.com/kula/pkcs11"
     "github.com/kula/pkcs11/p11"
 
-    "github.com/davecgh/go-spew/spew"
 )
 
 // Given a string s representing an unsigned integer, return a
@@ -185,7 +184,7 @@ func main() {
     }
 
     // Derive EC key
-    sharedSecret, err := privKey.Derive(*deriveMechanism, deriveAttributes)
+    sharedSecretObj, err := privKey.Derive(*deriveMechanism, deriveAttributes)
     if err != nil {
 	fmt.Printf("While calling privKey.Derive\n")
 	panic(err)
@@ -193,6 +192,10 @@ func main() {
 
     // And extract the value from the returned ephemeral key
 
-    spew.Dump(sharedSecret.Value())
+    sharedSecret, err := sharedSecretObj.Value()
+    if err != nil {
+	panic(err)
+    }
 
+    fmt.Printf("Shared secret: %0x\n", sharedSecret)
 }
