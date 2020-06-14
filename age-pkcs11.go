@@ -8,9 +8,9 @@ package main
 
 import (
     "crypto/ecdsa"
-    // "crypto/elliptic"
     "crypto/x509"
     "encoding/binary"
+    "encoding/hex"
     "encoding/pem"
     "errors"
     "fmt"
@@ -22,8 +22,10 @@ import (
 
     "golang.org/x/crypto/ssh/terminal"
 
-    "github.com/miekg/pkcs11"
-    "github.com/miekg/pkcs11/p11"
+    "github.com/kula/pkcs11"
+    "github.com/kula/pkcs11/p11"
+
+    "github.com/davecgh/go-spew/spew"
 )
 
 // Given a string s representing an unsigned integer, return a
@@ -35,8 +37,7 @@ func atoba(s string) ([]byte, error) {
     }
 
     if n < 0 {
-	return nil, errors.New("Cannot have a negative number")
-    }
+	return nil, errors.New("Cannot have a negative number") }
 
     if n <= math.MaxUint8 {
 	b := make([]byte, 1)
@@ -59,9 +60,11 @@ func atoba(s string) ([]byte, error) {
     }
 }
 
+
 func main() {
 
-    module, err := p11.OpenModule("/usr/lib/x86_64-linux-gnu/opensc-pkcs11.so")
+    //module, err := p11.OpenModule("/usr/lib/x86_64-linux-gnu/opensc-pkcs11.so")
+    module, err := p11.OpenModule("/opt/opensc-0.20.0/lib/pkcs11/pkcs11-spy.so")
     if err != nil {
 	panic(err)
     }
@@ -109,15 +112,14 @@ func main() {
 	pkcs11.NewAttribute(pkcs11.CKA_ID, idBytes),
     })
 
+    privKey := p11.PrivateKey(object)
     if err != nil {
 	panic(err)
     }
 
-    fmt.Printf("%+v\n", object)
-
     // Build derivation mechanism
 
-    //optMechanism := pkcs11.CKM_ECDH1_DERIVE
+    optMechanism := pkcs11.CKM_ECDH1_DERIVE
     optFileName := "prime256v1-pub.pem"
 
     pemData, err := ioutil.ReadFile(optFileName)
@@ -134,31 +136,63 @@ func main() {
 	panic("Not public key")
     }
 
-    publicKey, err := x509.ParsePKIXPublicKey(pemBlock.Bytes)
+    publicKeyIn, err := x509.ParsePKIXPublicKey(pemBlock.Bytes)
     if err != nil {
 	panic(err)
     }
 
-    switch publicKey.(type) {
-    case *ecdsa.PublicKey:
-    default:
+    publicKey, ok := publicKeyIn.(*ecdsa.PublicKey)
+    if ! ok {
 	panic("Not an ECDSA public key")
     }
+    // serialize that for PKCS11
 
-    fmt.Printf("%+v\n", publicKey)
+    // Some HSMs expect you to include the DER-encoded public key
+    // as the paramter to NewECDH1DeriveParams. I believe SoftHSM2
+    // is one of them.
 
-    //publicKeyData :=
-    //ecdh1Params := pkcs11.NewECDH1DeriveParams(pkcs11.CKD_NULL, nil, publicKeyData)
+    // Others expect you to simply send the bytes of the X and Y
+    // points on the curve that represent the public key, after a
+    // flag which tells the HSM if the points are uncompressed.
+
+    xString := fmt.Sprintf("%064s", fmt.Sprintf("%x", publicKey.X))
+    yString := fmt.Sprintf("%064s", fmt.Sprintf("%x", publicKey.Y))
+
+    publicKeyString := fmt.Sprintf("04%s%s", // '04' means uncompressed
+	xString,
+	yString)
+    publicKeyData, err := hex.DecodeString(publicKeyString)
+    if err != nil {
+	panic(err)
+    }
+    ecdh1Params := pkcs11.NewECDH1DeriveParams(pkcs11.CKD_NULL, []byte{}, publicKeyData)
 
     // So all of the examples for NewMechanism have you passing
     // in directly a pkcs11.CKM constant, which are ints,
     // but the function signature requires uints. :shrug:
-    //deriveMechanism := pkcs11.NewMechanism(uint(optMechanism), nil)
-
-    // fmt.Printf("%+v\n", deriveMechanism)
+    deriveMechanism := pkcs11.NewMechanism(uint(optMechanism), ecdh1Params)
+    deriveAttributes := []*pkcs11.Attribute{
+	pkcs11.NewAttribute(pkcs11.CKA_TOKEN, false),
+	pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY),
+	pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_GENERIC_SECRET),
+	pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, false),
+	pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, true),
+	pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, true),
+	pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, true),
+	pkcs11.NewAttribute(pkcs11.CKA_WRAP, true),
+	pkcs11.NewAttribute(pkcs11.CKA_UNWRAP, true),
+	pkcs11.NewAttribute(pkcs11.CKA_VALUE_LEN, 32),
+    }
 
     // Derive EC key
+    sharedSecret, err := privKey.Derive(*deriveMechanism, deriveAttributes)
+    if err != nil {
+	fmt.Printf("While calling privKey.Derive\n")
+	panic(err)
+    }
 
     // And extract the value from the returned ephemeral key
+
+    spew.Dump(sharedSecret.Value())
 
 }
