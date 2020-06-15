@@ -8,9 +8,9 @@ package main
 
 import (
     "crypto/ecdsa"
+    "crypto/elliptic"
     "crypto/x509"
     "crypto/sha256"
-    "encoding/hex"
     "encoding/pem"
     "errors"
     "flag"
@@ -105,27 +105,14 @@ func age_pkcs11(modulePath string, slotNum, tokenNum int, pinString, handlePemFi
 	return "", "", errors.New("Not an ECDSA public key")
     }
 
-    // serialize that for PKCS11
+    // serialize that for PKCS11 and add to the ECDH1 parameters
 
-    // Some HSMs expect you to include the DER-encoded public key
-    // as the paramter to NewECDH1DeriveParams. I believe SoftHSM2
-    // is one of them. Currently not handled
+    // This assumes your PKCS11 token wants the parameter to be
+    // the public point encoded as per section 4.3.6 of ANSI X9.62.
+    // If you have something that expects a DER-encoding, I'd love
+    // to hear from you so I can add that support
 
-    // Others expect you to simply send the bytes of the X and Y
-    // points on the curve that represent the public key, after a
-    // flag which tells the HSM if the points are uncompressed.
-    // I handle that case.
-
-    xString := fmt.Sprintf("%064s", fmt.Sprintf("%x", publicKey.X))
-    yString := fmt.Sprintf("%064s", fmt.Sprintf("%x", publicKey.Y))
-
-    publicKeyString := fmt.Sprintf("04%s%s", // '04' means uncompressed
-	xString,
-	yString)
-    publicKeyData, err := hex.DecodeString(publicKeyString)
-    if err != nil {
-	return "", "", err
-    }
+    publicKeyData := elliptic.Marshal(elliptic.P256(), publicKey.X, publicKey.Y)
     ecdh1Params := pkcs11.NewECDH1DeriveParams(pkcs11.CKD_NULL, []byte{}, publicKeyData)
 
     // So all of the examples for NewMechanism have you passing
