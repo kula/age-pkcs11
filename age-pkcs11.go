@@ -27,59 +27,41 @@ import (
     "golang.org/x/crypto/curve25519"
 )
 
-func main() {
-
-    modulePath, ok := os.LookupEnv("AGE_PKCS11_MODULE")
-    if ! ok {
-	panic("Must define AGE_PKCS11_MODULE")
-    }
-
+// Return private key string, public key string, error
+func age_pkcs11(modulePath string, slotNum, tokenNum int, pinString, handlePemFile string) (string, string, error) {
     module, err := p11.OpenModule(modulePath)
     if err != nil {
-	panic(err)
+	return "", "", err
     }
 
     slots, err := module.Slots()
     if err != nil {
-	panic(err)
+	return "", "", err
     }
 
-    slotString := os.Getenv("AGE_PKCS11_SLOT")
-    optSlotNum, optTokenNum, err := decode_slot(slotString)
-    if err != nil {
-	panic(err)
+    if slotNum < 0 || slotNum > len(slots) {
+	return "", "", errors.New("Slot not found")
     }
-
-    slot := slots[optSlotNum]
+    slot := slots[slotNum]
 
     session, err := slot.OpenSession()
     if err != nil {
-	panic(err)
+	return "", "", err
     }
 
     defer session.Close()
 
-    fmt.Print("User PIN: ")
-    bytePin, err := terminal.ReadPassword(syscall.Stdin)
+    err = session.Login(pinString)
     if err != nil {
-	panic(err)
-    }
-    fmt.Print("\n")
-
-    pin := string(bytePin)
-    pin = strings.TrimSpace(pin)
-
-    err = session.Login(pin)
-    if err != nil {
-	panic(err)
+	return "", "", err
     }
 
     defer session.Logout()
 
     // Find the ECDH private key object by id
-    idBytes,err := itoba(optTokenNum)
+    idBytes,err := itoba(tokenNum)
     if err != nil {
-	panic(err)
+	return "", "", err
     }
 
     object, err := session.FindObject([]*pkcs11.Attribute{
@@ -89,49 +71,47 @@ func main() {
 
     privKey := p11.PrivateKey(object)
     if err != nil {
-	panic(err)
+	return "", "", err
     }
 
     // Build derivation mechanism
 
     optMechanism := pkcs11.CKM_ECDH1_DERIVE
-    optHandlePemFile, ok := os.LookupEnv("AGE_PKCS11_HANDLE_FILE")
-    if ! ok {
-	panic(errors.New("Must define AGE_PKCS11_HANDLE_FILE"))
-    }
 
-    pemData, err := ioutil.ReadFile(optHandlePemFile)
+    pemData, err := ioutil.ReadFile(handlePemFile)
     if err != nil {
-	panic(err)
+	return "", "", err
     }
 
     pemBlock, _ := pem.Decode(pemData)
     if pemBlock == nil {
-	panic("failed to parse PEM block containing the public key")
+	return "", "", errors.New("failed to parse PEM block containing the public key")
     }
 
     if pemBlock.Type != "PUBLIC KEY" {
-	panic("Not public key")
+	return "", "", errors.New("Not public key")
     }
 
     publicKeyIn, err := x509.ParsePKIXPublicKey(pemBlock.Bytes)
     if err != nil {
-	panic(err)
+	return "", "", err
     }
 
     publicKey, ok := publicKeyIn.(*ecdsa.PublicKey)
     if ! ok {
-	panic("Not an ECDSA public key")
+	return "", "", errors.New("Not an ECDSA public key")
     }
+
     // serialize that for PKCS11
 
     // Some HSMs expect you to include the DER-encoded public key
     // as the paramter to NewECDH1DeriveParams. I believe SoftHSM2
-    // is one of them.
+    // is one of them. Currently not handled
 
     // Others expect you to simply send the bytes of the X and Y
     // points on the curve that represent the public key, after a
     // flag which tells the HSM if the points are uncompressed.
+    // I handle that case.
 
     xString := fmt.Sprintf("%064s", fmt.Sprintf("%x", publicKey.X))
     yString := fmt.Sprintf("%064s", fmt.Sprintf("%x", publicKey.Y))
@@ -141,7 +121,7 @@ func main() {
 	yString)
     publicKeyData, err := hex.DecodeString(publicKeyString)
     if err != nil {
-	panic(err)
+	return "", "", err
     }
     ecdh1Params := pkcs11.NewECDH1DeriveParams(pkcs11.CKD_NULL, []byte{}, publicKeyData)
 
@@ -165,30 +145,65 @@ func main() {
     // Derive EC key
     sharedSecretObj, err := privKey.Derive(*deriveMechanism, deriveAttributes)
     if err != nil {
-	fmt.Printf("While calling privKey.Derive\n")
-	panic(err)
+	return "", "", err
     }
 
     // And extract the value from the returned ephemeral key
 
     ageSecretKey, err := sharedSecretObj.Value()
     if err != nil {
-	panic(err)
+	return "", "", err
     }
 
     // Convert and format as age Curve25519 keys
 
     agePublicKey, err := curve25519.X25519(ageSecretKey, curve25519.Basepoint)
     if err != nil {
-	panic(err)
+	return "", "", err
     }
 
     ageSecretKeyString, err := bech32.Encode("AGE-SECRET-KEY-", ageSecretKey)
     if err != nil {
-	panic(err)
+	return "", "", err
     }
 
     agePublicKeyString, err := bech32.Encode("age", agePublicKey)
+    if err != nil {
+	return "", "", err
+    }
+
+    return ageSecretKeyString, agePublicKeyString, nil
+}
+
+func main() {
+
+    modulePath, ok := os.LookupEnv("AGE_PKCS11_MODULE")
+    if ! ok {
+	panic("Must define AGE_PKCS11_MODULE")
+    }
+
+    slotString := os.Getenv("AGE_PKCS11_SLOT")
+    slotNum, tokenNum, err := decode_slot(slotString)
+    if err != nil {
+	panic(err)
+    }
+
+    fmt.Print("User PIN: ")
+    bytePin, err := terminal.ReadPassword(syscall.Stdin)
+    if err != nil {
+	panic(err)
+    }
+    fmt.Print("\n")
+
+    pinString := string(bytePin)
+    pinString = strings.TrimSpace(pinString)
+
+    handlePemFile, ok := os.LookupEnv("AGE_PKCS11_HANDLE_FILE")
+    if ! ok {
+	panic(errors.New("Must define AGE_PKCS11_HANDLE_FILE"))
+    }
+
+    ageSecretKeyString, agePublicKeyString, err := age_pkcs11(modulePath, slotNum, tokenNum, pinString, handlePemFile)
     if err != nil {
 	panic(err)
     }
