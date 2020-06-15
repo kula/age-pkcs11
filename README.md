@@ -101,6 +101,7 @@ were set, you could do that or supply the correct command line flags.
 
  * Verify the derivation scheme I'm using below cryptographically
    makes sense
+ * Verify the HKDF scheme I'm using also makes sense
  * Make more robust in terms of checking that the public key supplied
    matches the private key we're being asked to use for ECDH
  * Find an example test case for a PKCS11 token which requires the
@@ -132,3 +133,5 @@ throw away the private part since all we need is the public part. In
 effect, the public half of the key becomes an age key "handle"; useless
 without the actual PKCS11 token but necessary to derive the shared
 secret which can then be turned into an age Ed25519 key. 
+
+The shared secret generated is passed through an HKDF as a sanity scheme.

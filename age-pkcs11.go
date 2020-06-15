@@ -9,6 +9,7 @@ package main
 import (
     "crypto/ecdsa"
     "crypto/x509"
+    "crypto/sha256"
     "encoding/hex"
     "encoding/pem"
     "errors"
@@ -26,6 +27,7 @@ import (
     "github.com/kula/age-pkcs11/bech32"
 
     "golang.org/x/crypto/curve25519"
+    "golang.org/x/crypto/hkdf"
 )
 
 // Return private key string, public key string, error
@@ -151,9 +153,19 @@ func age_pkcs11(modulePath string, slotNum, tokenNum int, pinString, handlePemFi
 
     // And extract the value from the returned ephemeral key
 
-    ageSecretKey, err := sharedSecretObj.Value()
+    sharedSecretBytes, err := sharedSecretObj.Value()
     if err != nil {
 	return "", "", err
+    }
+
+    // Expand those bytes using an HKDF
+
+    stretchedSecretBytes := hkdf.New(sha256.New, sharedSecretBytes, []byte{}, []byte{})
+
+    ageSecretKey := make([]byte, 32)
+    n, err := stretchedSecretBytes.Read(ageSecretKey)
+    if n < 32 {
+	return "", "", fmt.Errorf("Read %d bytes from stretched secret key", n)
     }
 
     // Convert and format as age Curve25519 keys
