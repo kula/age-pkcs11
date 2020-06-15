@@ -30,16 +30,13 @@ import (
     "golang.org/x/crypto/curve25519"
 )
 
-// Given a string s representing an unsigned integer, return a
-// byte array representing the integer
-func atoba(s string) ([]byte, error) {
-    n, err := strconv.ParseUint(s, 0, 64)
-    if err != nil {
-	return nil, err
-    }
+// Given an integer, return a byte array representing the integer
+// XXX fix endianness assumption
+func itoba(n int) ([]byte, error) {
 
     if n < 0 {
-	return nil, errors.New("Cannot have a negative number") }
+	return nil, errors.New("Cannot have a negative number")
+    }
 
     if n <= math.MaxUint8 {
 	b := make([]byte, 1)
@@ -53,15 +50,53 @@ func atoba(s string) ([]byte, error) {
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint32(b, uint32(n))
 	return b, nil
-    } else if n <= math.MaxUint64 {
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, uint64(n))
-	return b, nil
     } else {
 	return nil, errors.New("Number too large")
     }
 }
 
+// Given a string like "slot#:token#", return slot and
+// token. Both default to 0. Return error if passed something
+// not a number
+func decode_slot(s string) (int, int, error) {
+    if len(s) == 0 {
+	// Return defaults
+	return 0, 0, nil
+    }
+
+    var sliceString, tokenString string
+    sSlice := strings.Split(s, ":")
+    switch len(sSlice) {
+    case 1:
+	sliceString = sSlice[0]
+	tokenString = "0"
+    case 2:
+	sliceString = sSlice[0]
+	tokenString = sSlice[1]
+    default:
+	return 0,0 , errors.New("bad slot string")
+    }
+
+    slice, err := strconv.Atoi(sliceString)
+    if err != nil {
+	return 0,0 , fmt.Errorf("Bad slot value: %s", slice)
+    }
+
+    token, err := strconv.Atoi(tokenString)
+    if err != nil {
+	return 0, 0, fmt.Errorf("Bad token value: %s", slice)
+    }
+
+    if slice < 0 {
+	return 0, 0, fmt.Errorf("Slice cannot be less than 0")
+    }
+
+    if token < 0 {
+	return 0, 0, fmt.Errorf("Token cannot be less than 0")
+    }
+
+    return slice, token, nil
+}
 
 func main() {
 
@@ -79,7 +114,13 @@ func main() {
     if err != nil {
 	panic(err)
     }
-    optSlotNum := 0
+
+    slotString := os.Getenv("AGE_PKCS11_SLOT")
+    optSlotNum, optTokenNum, err := decode_slot(slotString)
+    if err != nil {
+	panic(err)
+    }
+
     slot := slots[optSlotNum]
 
     session, err := slot.OpenSession()
@@ -107,8 +148,7 @@ func main() {
     defer session.Logout()
 
     // Find the ECDH private key object by id
-    id := "1"
-    idBytes,err := atoba(id)
+    idBytes,err := itoba(optTokenNum)
     if err != nil {
 	panic(err)
     }
