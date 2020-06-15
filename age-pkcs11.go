@@ -188,14 +188,18 @@ func main() {
 	panic(err)
     }
 
-    fmt.Print("User PIN: ")
-    bytePin, err := terminal.ReadPassword(syscall.Stdin)
-    if err != nil {
-	panic(err)
+    var pinString string
+    pinString, ok = os.LookupEnv("AGE_PKCS11_USER_PIN")
+    if ! ok {
+	fmt.Print("User PIN: ")
+	pinBytes, err := terminal.ReadPassword(syscall.Stdin)
+	if err != nil {
+	    panic(err)
+	}
+	fmt.Print("\n")
+	pinString = string(pinBytes)
     }
-    fmt.Print("\n")
 
-    pinString := string(bytePin)
     pinString = strings.TrimSpace(pinString)
 
     handlePemFile, ok := os.LookupEnv("AGE_PKCS11_HANDLE_FILE")
