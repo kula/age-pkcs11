@@ -9,14 +9,12 @@ package main
 import (
     "crypto/ecdsa"
     "crypto/x509"
-    "encoding/binary"
     "encoding/hex"
     "encoding/pem"
     "errors"
     "fmt"
     "io/ioutil"
     "os"
-    "math"
     "strconv"
     "strings"
     "syscall"
@@ -29,31 +27,6 @@ import (
 
     "golang.org/x/crypto/curve25519"
 )
-
-// Given an integer, return a byte array representing the integer
-// XXX fix endianness assumption
-func itoba(n int) ([]byte, error) {
-
-    if n < 0 {
-	return nil, errors.New("Cannot have a negative number")
-    }
-
-    if n <= math.MaxUint8 {
-	b := make([]byte, 1)
-	b[0] = byte(n)
-	return b, nil
-    } else if n <= math.MaxUint16 {
-	b := make([]byte, 2)
-	binary.LittleEndian.PutUint16(b, uint16(n))
-	return b, nil
-    } else if n <= math.MaxUint32 {
-	b := make([]byte, 4)
-	binary.LittleEndian.PutUint32(b, uint32(n))
-	return b, nil
-    } else {
-	return nil, errors.New("Number too large")
-    }
-}
 
 // Given a string like "slot#:token#", return slot and
 // token. Both default to 0. Return error if passed something
