@@ -166,9 +166,12 @@ func main() {
     // Build derivation mechanism
 
     optMechanism := pkcs11.CKM_ECDH1_DERIVE
-    optFileName := "prime256v1-pub.pem"
+    optHandlePemFile, ok := os.LookupEnv("AGE_PKCS11_HANDLE_FILE")
+    if ! ok {
+	panic(errors.New("Must define AGE_PKCS11_HANDLE_FILE"))
+    }
 
-    pemData, err := ioutil.ReadFile(optFileName)
+    pemData, err := ioutil.ReadFile(optHandlePemFile)
     if err != nil {
 	panic(err)
     }
