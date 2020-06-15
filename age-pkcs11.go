@@ -15,6 +15,7 @@ import (
     "errors"
     "fmt"
     "io/ioutil"
+    "os"
     "math"
     "strconv"
     "strings"
@@ -64,8 +65,12 @@ func atoba(s string) ([]byte, error) {
 
 func main() {
 
-    //module, err := p11.OpenModule("/usr/lib/x86_64-linux-gnu/opensc-pkcs11.so")
-    module, err := p11.OpenModule("/opt/opensc-0.20.0/lib/pkcs11/pkcs11-spy.so")
+    modulePath, ok := os.LookupEnv("AGE_PKCS11_MODULE")
+    if ! ok {
+	panic("Must define AGE_PKCS11_MODULE")
+    }
+
+    module, err := p11.OpenModule(modulePath)
     if err != nil {
 	panic(err)
     }
