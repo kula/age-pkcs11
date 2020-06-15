@@ -24,7 +24,9 @@ import (
 
     "github.com/kula/pkcs11"
     "github.com/kula/pkcs11/p11"
+    "github.com/kula/age-pkcs11/bech32"
 
+    "golang.org/x/crypto/curve25519"
 )
 
 // Given a string s representing an unsigned integer, return a
@@ -192,10 +194,27 @@ func main() {
 
     // And extract the value from the returned ephemeral key
 
-    sharedSecret, err := sharedSecretObj.Value()
+    ageSecretKey, err := sharedSecretObj.Value()
     if err != nil {
 	panic(err)
     }
 
-    fmt.Printf("Shared secret: %0x\n", sharedSecret)
+    // Convert and format as age Curve25519 keys
+
+    agePublicKey, err := curve25519.X25519(ageSecretKey, curve25519.Basepoint)
+    if err != nil {
+	panic(err)
+    }
+
+    ageSecretKeyString, err := bech32.Encode("AGE-SECRET-KEY-", ageSecretKey)
+    if err != nil {
+	panic(err)
+    }
+
+    agePublicKeyString, err := bech32.Encode("age", agePublicKey)
+    if err != nil {
+	panic(err)
+    }
+
+    fmt.Printf("%s\n%s\n", ageSecretKeyString, agePublicKeyString)
 }
