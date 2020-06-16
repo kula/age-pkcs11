@@ -31,6 +31,9 @@ import (
     "golang.org/x/crypto/hkdf"
 )
 
+
+const contextString = "age-encryption.org/v1:pkcs11v1"
+
 // Return private key string, public key string, error
 func age_pkcs11(modulePath string, slotNum, tokenNum int, pinString, handlePemFile string) (string, string, error) {
     module, err := p11.OpenModule(modulePath)
@@ -148,7 +151,8 @@ func age_pkcs11(modulePath string, slotNum, tokenNum int, pinString, handlePemFi
 
     // Expand those bytes using an HKDF
 
-    stretchedSecretBytes := hkdf.New(sha256.New, sharedSecretBytes, []byte{}, []byte{})
+
+    stretchedSecretBytes := hkdf.New(sha256.New, sharedSecretBytes, []byte{}, []byte(contextString))
 
     ageSecretKey := make([]byte, 32)
     n, err := stretchedSecretBytes.Read(ageSecretKey)
