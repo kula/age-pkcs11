@@ -10,6 +10,7 @@ import (
     "crypto/ecdsa"
     "crypto/elliptic"
     "crypto/x509"
+    "crypto/rand"
     "crypto/sha256"
     "encoding/pem"
     "errors"
@@ -175,17 +176,45 @@ func age_pkcs11(modulePath string, slotNum, tokenNum int, pinString, handlePemFi
     return ageSecretKeyString, agePublicKeyString, nil
 }
 
+// Generate a new ECHD public key and write it as a PEM encoded
+// file at `filename`, for use as a key "handle"
+func do_newHandle(handlePath string) {
+    priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+    if err != nil {
+	panic(err)
+    }
+
+    der, err := x509.MarshalPKIXPublicKey(&priv.PublicKey)
+    if err != nil {
+	panic(err)
+    }
+
+    block := &pem.Block{
+	Type: "PUBLIC KEY",
+	Bytes: der,
+    }
+
+    pemBytes := pem.EncodeToMemory(block)
+    err = ioutil.WriteFile(handlePath, pemBytes, 0600)
+    if err != nil {
+	panic(err)
+    }
+    os.Exit(0)
+}
+
 const usage = `Usage:
     age-pkcs11 -i [-m MODULE] [-s SLOT:TOKEN] [-h HANDLE] [-o OUTPUT]
     age-pkcs11 -r [-m MODULE] [-s SLOT:TOKEN] [-h HANDLE] [-o OUTPUT]
+    age-pkcs11 --new-handle [-f HANDLE]
 
 Derive an age encryption key via ECDH given a PKCS11 token with an
 elliptic curve private key and a handle file HANDLE with an elliptic
-curve public key.
+curve public key. Or, generate a new file suitable for use as a handle.
 
 Options:
     -i, --private   Output private half of age key
     -r, --public    Output public half of age key
+    --new-handle    Generate a new handle
     -m, --module    Path to token PKCS11 module
     -s, --slot      Set in the form 'SLOT:TOKEN' to specify the 
                     PKCS11 slot and token numbers used. Defaults
@@ -206,7 +235,7 @@ func main() {
     var ok bool
 
     var modulePath, slotString, handlePath, outputPath string
-    var showPrivate, showPublic bool
+    var showPrivate, showPublic, newHandle bool
 
     flag.Usage = func() { fmt.Fprintf(os.Stderr, "%s\n", usage) }
 
@@ -222,7 +251,18 @@ func main() {
     flag.BoolVar(&showPublic, "r", false, "show public key")
     flag.StringVar(&outputPath, "output", "", "output to `FILE` (default stdout)")
     flag.StringVar(&outputPath, "o", "", "output to `FILE` (default stdout)")
+    flag.BoolVar(&newHandle, "new-handle", false, "generate a new handle file")
     flag.Parse()
+
+    if newHandle {
+	if showPrivate || showPublic {
+	    fmt.Fprintf(os.Stderr, "%s\n\n", usage)
+	    fmt.Fprintf(os.Stderr, "Error: specify only one of --private, --public or --new-handle\n")
+	    os.Exit(1)
+	}
+
+	do_newHandle(handlePath)
+    }
 
     if (showPrivate && showPublic) || ( showPrivate == false && showPublic == false) {
 	fmt.Fprintf(os.Stderr, "%s\n\n", usage)
