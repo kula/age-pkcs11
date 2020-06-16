@@ -23,8 +23,8 @@ import (
 
     "golang.org/x/crypto/ssh/terminal"
 
-    "github.com/kula/pkcs11"
-    "github.com/kula/pkcs11/p11"
+    "github.com/miekg/pkcs11"
+    "github.com/miekg/pkcs11/p11"
     "github.com/kula/age-pkcs11/bech32"
 
     "golang.org/x/crypto/curve25519"
@@ -137,14 +137,7 @@ func age_pkcs11(modulePath string, slotNum, tokenNum int, pinString, handlePemFi
     }
 
     // Derive EC key
-    sharedSecretObj, err := privKey.Derive(*deriveMechanism, deriveAttributes)
-    if err != nil {
-	return "", "", err
-    }
-
-    // And extract the value from the returned ephemeral key
-
-    sharedSecretBytes, err := sharedSecretObj.Value()
+    sharedSecretBytes, err := privKey.Derive(*deriveMechanism, deriveAttributes)
     if err != nil {
 	return "", "", err
     }

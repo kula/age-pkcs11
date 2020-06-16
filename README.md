@@ -4,6 +4,11 @@
 
 **Use at your own risk, and after your own careful evaluation.**
 
+## Note on building
+
+This assumes you have github.com/miekg/pkcs11 with [this pull request](github.com/miekg/pkcs11/pull/128)
+applied.
+
 ## Usage
 
 ```
