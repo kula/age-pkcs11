@@ -6,7 +6,7 @@
 
 ## Note on building
 
-This assumes you have github.com/miekg/pkcs11 with [this pull request](github.com/miekg/pkcs11/pull/128)
+This assumes you have github.com/miekg/pkcs11 with [this pull request](https://github.com/miekg/pkcs11/pull/128)
 applied.
 
 ## Usage
