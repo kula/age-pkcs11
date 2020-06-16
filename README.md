@@ -10,14 +10,16 @@
 Usage:
     age-pkcs11 -i [-m MODULE] [-s SLOT:TOKEN] [-h HANDLE] [-o OUTPUT]
     age-pkcs11 -r [-m MODULE] [-s SLOT:TOKEN] [-h HANDLE] [-o OUTPUT]
+    age-pkcs11 --new-handle [-f HANDLE]
 
 Derive an age encryption key via ECDH given a PKCS11 token with an
 elliptic curve private key and a handle file HANDLE with an elliptic
-curve public key.
+curve public key. Or, generate a new file suitable for use as a handle.
 
 Options:
     -i, --private   Output private half of age key
     -r, --public    Output public half of age key
+    --new-handle    Generate a new handle
     -m, --module    Path to token PKCS11 module
     -s, --slot      Set in the form 'SLOT:TOKEN' to specify the 
                     PKCS11 slot and token numbers used. Defaults
@@ -67,6 +69,11 @@ dependent on your PKCS11 token or HSM.
 Create a 'handle' file:
 
 ```
+age-pkcs11 --new-handle -f new-handle.pem
+```
+
+This is equivalent to the `openssl` commands:
+```
 openssl ecparam -name prime256v1 -genkey -noout -out age-key-handle.pem
 openssl ec -in age-key-handle.pem -pubout -out age-key-handle.pub.pem
 rm age-key-handle.pem   # You no longer need this part
@@ -108,7 +115,6 @@ were set, you could do that or supply the correct command line flags.
    public key point to be sent as DER-encoded binary bytes
  * Should sample key above only have `derive` and not also `sign`?
  * More robust error handling
- * Generate a 'handle' file
 
 ## Theory of operation
 
