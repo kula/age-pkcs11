@@ -1,5 +1,11 @@
 # age-encryption.org with PKCS11 Tokens
 
+## An alternative
+
+[This pull request in rage](https://github.com/str4d/rage/pull/25) (the Rust
+implementation of age) provides an alternative, and is what is likely going
+to be implemented in age as part of the upcoming age plugin system.
+
 ## Caveat
 
 **Use at your own risk, and after your own careful evaluation.**
