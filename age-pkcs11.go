@@ -36,6 +36,8 @@ const contextString = "age-encryption.org/v1:pkcs11v1"
 
 // Return private key string, public key string, error
 func age_pkcs11(modulePath string, slotNum, tokenNum int, pinString, handlePemFile string) (string, string, error) {
+    supportedCurve := elliptic.P256()
+
     module, err := p11.OpenModule(modulePath)
     if err != nil {
 	return "", "", err
@@ -108,6 +110,13 @@ func age_pkcs11(modulePath string, slotNum, tokenNum int, pinString, handlePemFi
     if ! ok {
 	return "", "", errors.New("Not an ECDSA public key")
     }
+
+    // Verify it's a P-256 public key - one joint, keep it well
+    // oiled
+    if publicKey.Curve != supportedCurve {
+	return "", "", fmt.Errorf("Must be a %s curve", supportedCurve.Params().Name)
+    }
+
 
     // serialize that for PKCS11 and add to the ECDH1 parameters
 
