@@ -7,15 +7,9 @@
 package main
 
 import (
-    "crypto/ecdsa"
-    "crypto/elliptic"
-    "crypto/x509"
-    "crypto/rand"
-    "encoding/pem"
     "errors"
     "flag"
     "fmt"
-    "io/ioutil"
     "os"
     "strings"
     "syscall"
@@ -23,32 +17,6 @@ import (
     "golang.org/x/crypto/ssh/terminal"
 
 )
-
-// Generate a new ECHD public key and write it as a PEM encoded
-// file at `filename`, for use as a key "handle"
-func do_newHandle(handlePath string) {
-    priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-    if err != nil {
-	panic(err)
-    }
-
-    der, err := x509.MarshalPKIXPublicKey(&priv.PublicKey)
-    if err != nil {
-	panic(err)
-    }
-
-    block := &pem.Block{
-	Type: "PUBLIC KEY",
-	Bytes: der,
-    }
-
-    pemBytes := pem.EncodeToMemory(block)
-    err = ioutil.WriteFile(handlePath, pemBytes, 0600)
-    if err != nil {
-	panic(err)
-    }
-    os.Exit(0)
-}
 
 const usage = `Usage:
     age-pkcs11 -i [-m MODULE] [-s SLOT:TOKEN] [-h HANDLE] [-o OUTPUT]
