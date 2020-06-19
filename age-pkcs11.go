@@ -77,7 +77,12 @@ func main() {
 	    os.Exit(1)
 	}
 
-	do_newHandle(handlePath)
+	err := writeNewHandle(handlePath)
+	if err != nil {
+	    panic(err)
+	}
+
+	os.Exit(0)
     }
 
     if (showPrivate && showPublic) || ( showPrivate == false && showPublic == false) {

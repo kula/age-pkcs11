@@ -13,21 +13,36 @@ import (
     "crypto/rand"
     "encoding/pem"
     "io/ioutil"
-    "os"
 
 )
 
 // Generate a new ECHD public key and write it as a PEM encoded
 // file at `filename`, for use as a key "handle"
-func do_newHandle(handlePath string) {
+func writeNewHandle(handlePath string) (error) {
+    pemBytes, err := newHandle()
+    if err != nil {
+	return err
+    }
+
+    err = ioutil.WriteFile(handlePath, *pemBytes, 0600)
+    if err != nil {
+	return err
+    }
+
+    return nil
+}
+
+// Generate a new ECDSA public key and output the PEM-encoded
+// representaton of it as a byte string
+func newHandle() (*[]byte, error) {
     priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
     if err != nil {
-	panic(err)
+	return nil, err
     }
 
     der, err := x509.MarshalPKIXPublicKey(&priv.PublicKey)
     if err != nil {
-	panic(err)
+	return nil, err
     }
 
     block := &pem.Block{
@@ -36,9 +51,5 @@ func do_newHandle(handlePath string) {
     }
 
     pemBytes := pem.EncodeToMemory(block)
-    err = ioutil.WriteFile(handlePath, pemBytes, 0600)
-    if err != nil {
-	panic(err)
-    }
-    os.Exit(0)
+    return &pemBytes, nil
 }
