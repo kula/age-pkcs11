@@ -70,10 +70,11 @@ func age_pkcs11(modulePath string, slotNum, tokenNum int, pinString, handlePemFi
 		pkcs11.NewAttribute(pkcs11.CKA_ID, idBytes),
 	})
 
-	privKey := p11.PrivateKey(object)
 	if err != nil {
 		return "", "", err
 	}
+
+	privKey := p11.PrivateKey(object)
 
 	// Build derivation mechanism
 
