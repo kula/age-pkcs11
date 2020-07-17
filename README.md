@@ -151,4 +151,5 @@ effect, the public half of the key becomes an age key "handle"; useless
 without the actual PKCS11 token but necessary to derive the shared
 secret which can then be turned into an age Ed25519 key. 
 
-The shared secret generated is passed through an HKDF as a sanity scheme.
+The shared secret generated is passed through an HKDF to make it suitable
+to use as a cryptographic key.
