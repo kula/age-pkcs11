@@ -74,39 +74,39 @@ func age_pkcs11(modulePath string, slotNum, tokenNum int, pinString, handlePemFi
 		return "", "", err
 	}
 
-	privKey := p11.PrivateKey(object)
+	pkcsPrivKey := p11.PrivateKey(object)
 
 	// Build derivation mechanism
 
 	optMechanism := pkcs11.CKM_ECDH1_DERIVE
 
-	pemData, err := ioutil.ReadFile(handlePemFile)
+	handlePemData, err := ioutil.ReadFile(handlePemFile)
 	if err != nil {
 		return "", "", err
 	}
 
-	pemBlock, _ := pem.Decode(pemData)
-	if pemBlock == nil {
+	handlePemBlock, _ := pem.Decode(handlePemData)
+	if handlePemBlock == nil {
 		return "", "", errors.New("failed to parse PEM block containing the public key")
 	}
 
-	if pemBlock.Type != "PUBLIC KEY" {
+	if handlePemBlock.Type != "PUBLIC KEY" {
 		return "", "", errors.New("Not public key")
 	}
 
-	publicKeyIn, err := x509.ParsePKIXPublicKey(pemBlock.Bytes)
+	handlePublicKeyIn, err := x509.ParsePKIXPublicKey(handlePemBlock.Bytes)
 	if err != nil {
 		return "", "", err
 	}
 
-	publicKey, ok := publicKeyIn.(*ecdsa.PublicKey)
+	handlePublicKey, ok := handlePublicKeyIn.(*ecdsa.PublicKey)
 	if !ok {
 		return "", "", errors.New("Not an ECDSA public key")
 	}
 
 	// Verify it's a P-256 public key - one joint, keep it well
 	// oiled
-	if publicKey.Curve != supportedCurve {
+	if handlePublicKey.Curve != supportedCurve {
 		return "", "", fmt.Errorf("Must be a %s curve", supportedCurve.Params().Name)
 	}
 
@@ -117,8 +117,8 @@ func age_pkcs11(modulePath string, slotNum, tokenNum int, pinString, handlePemFi
 	// If you have something that expects a DER-encoding, I'd love
 	// to hear from you so I can add that support
 
-	publicKeyData := elliptic.Marshal(elliptic.P256(), publicKey.X, publicKey.Y)
-	ecdh1Params := pkcs11.NewECDH1DeriveParams(pkcs11.CKD_NULL, []byte{}, publicKeyData)
+	handlePublicKeyData := elliptic.Marshal(elliptic.P256(), handlePublicKey.X, handlePublicKey.Y)
+	ecdh1Params := pkcs11.NewECDH1DeriveParams(pkcs11.CKD_NULL, []byte{}, handlePublicKeyData)
 
 	// So all of the examples for NewMechanism have you passing
 	// in directly a pkcs11.CKM constant, which are ints,
@@ -138,7 +138,7 @@ func age_pkcs11(modulePath string, slotNum, tokenNum int, pinString, handlePemFi
 	}
 
 	// Derive EC key
-	sharedSecretBytes, err := privKey.Derive(*deriveMechanism, deriveAttributes)
+	sharedSecretBytes, err := pkcsPrivKey.Derive(*deriveMechanism, deriveAttributes)
 	if err != nil {
 		return "", "", err
 	}
