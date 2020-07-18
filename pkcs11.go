@@ -11,6 +11,7 @@ import (
 	"crypto/elliptic"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/asn1"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -25,6 +26,9 @@ import (
 )
 
 const pkcs11Label = "age-encryption.org/v1/pkcs11"
+
+// RFC 5480 2.1.1.1 Named Curve
+var oidNamedCurveP256 = asn1.ObjectIdentifier{1, 2, 840, 10045, 3, 1, 7}
 
 // Return private key string, public key string, error
 func age_pkcs11(modulePath string, slotNum, tokenNum int, pinString, handlePemFile string) (string, string, error) {
@@ -68,6 +72,7 @@ func age_pkcs11(modulePath string, slotNum, tokenNum int, pinString, handlePemFi
 	object, err := session.FindObject([]*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PRIVATE_KEY),
 		pkcs11.NewAttribute(pkcs11.CKA_ID, idBytes),
+		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_EC),
 	})
 
 	if err != nil {
@@ -75,6 +80,59 @@ func age_pkcs11(modulePath string, slotNum, tokenNum int, pinString, handlePemFi
 	}
 
 	pkcsPrivKey := p11.PrivateKey(object)
+
+	// Find the ECDH public key object by id. We verify that it's a P-256
+	// curve and use the CKA_EC_POINT (the public key) to add to the HKDF
+	// shared key salt
+
+	object, err = session.FindObject([]*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
+		pkcs11.NewAttribute(pkcs11.CKA_ID, idBytes),
+		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_EC),
+	})
+
+	if err != nil {
+		return "", "", err
+	}
+
+	pkcsPubEcParams, err := object.Attribute(uint(pkcs11.CKA_EC_PARAMS))
+	if err != nil {
+		return "", "", err
+	}
+
+	pkcsPubNamedCurveOID := new(asn1.ObjectIdentifier)
+	rest, err := asn1.Unmarshal(pkcsPubEcParams, pkcsPubNamedCurveOID)
+	if err != nil {
+		return "", "", errors.New("Failed to parse token public key parameters as named curve")
+	}
+
+	if len(rest) != 0 {
+		return "", "", errors.New("Trailing data after token public key parameters")
+	}
+
+	if ! oidNamedCurveP256.Equal(*pkcsPubNamedCurveOID) {
+		return "", "", errors.New("Token public key is not P256 curve")
+	}
+
+	pkcsPubECPointBytes, err := object.Attribute(uint(pkcs11.CKA_EC_POINT))
+	if err != nil {
+		return "", "", err
+	}
+
+	var pkcsPubECPoint []byte
+
+	rest, err = asn1.Unmarshal(pkcsPubECPointBytes, &pkcsPubECPoint)
+	if err != nil {
+		return "", "", err
+	}
+	if len(rest) != 0 {
+		return "", "", errors.New("Trailing data after public key bytes")
+	}
+
+	pkcsPublicKeyX, pkcsPublicKeyY := elliptic.Unmarshal(elliptic.P256(), pkcsPubECPoint)
+	if pkcsPublicKeyX == nil {
+		return "", "", errors.New("Cannot unmarshal token public key")
+	}
 
 	// Build derivation mechanism
 
@@ -145,7 +203,18 @@ func age_pkcs11(modulePath string, slotNum, tokenNum int, pinString, handlePemFi
 
 	// Expand those bytes using an HKDF
 
-	stretchedSecretBytes := hkdf.New(sha256.New, sharedSecretBytes, []byte{}, []byte(pkcs11Label))
+	ppkxb := pkcsPublicKeyX.Bytes()
+	ppkyb := pkcsPublicKeyY.Bytes()
+	hpkxb := handlePublicKey.X.Bytes()
+	hpkyb := handlePublicKey.Y.Bytes()
+
+	salt := make([]byte, 0, len(ppkxb) + len(ppkyb) + len(hpkxb) + len(hpkyb))
+	salt = append(salt, ppkxb...)
+	salt = append(salt, ppkyb...)
+	salt = append(salt, hpkxb...)
+	salt = append(salt, hpkyb...)
+
+	stretchedSecretBytes := hkdf.New(sha256.New, sharedSecretBytes, salt, []byte(pkcs11Label))
 
 	ageSecretKey := make([]byte, 32)
 	n, err := stretchedSecretBytes.Read(ageSecretKey)
